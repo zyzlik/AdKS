@@ -1,0 +1,60 @@
+secrets:
+ - name: bankcreds
+   metadata:
+     team_owner: Payments
+     use_description: >
+       The bankcreds credential is a colon delimited username, password pair for access to
+       accounts with a bank. 
+   global: false
+   shape: plaintext
+   pipeline:
+    - name: alpha
+      production: false
+      targets:
+      - kubernetes:
+          account_role: sandbox/ar1
+          namespace: 
+            - demo
+            - demo2
+          cluster: alpha1
+      - kubernetes:
+          account_role: sandbox/ar1
+          namespace: 
+            - demo
+          cluster: alpha1
+      - kubernetes:
+          account_role: sandbox/ar1
+          namespace: 
+            - demo2
+          cluster: alpha1
+    - name: testing
+      production: false
+      targets:
+       - kubernetes:
+           account_role: qa/ar1
+           namespace: 
+            - testgroup1
+           cluster: beta1
+       - kubernetes:
+           account_role: qa/ar1
+           namespace: 
+            - testgroup2
+           cluster: beta1
+       - kubernetes:
+           account_role: qa/ar1
+           namespace: 
+            - testgroup2
+           cluster: integ1
+    - name: production
+      production: true
+      targets:
+       - kubernetes:
+           account_role: prod/ar1
+           namespace: 
+            - banking
+           cluster: na1
+       - kubernetes:
+           account_role: prod/ar1
+           namespace: 
+            - banking
+           cluster: na2
