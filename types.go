@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"time"
 
@@ -31,6 +30,58 @@ const principal_role string = "arn:aws:iam::047313371957:role/production-ue1-dev
 
 type SecretList struct {
 	Secrets []Secret `yaml:"secrets"`
+}
+
+// Shape is a string enumeration that tells the secret
+// lifecycle manager how to handle the material. For
+// example, secretsmanager secrets might be created as
+// string or blob data. A binary secret or structured
+// file content should be created using a secretsmanager
+// blob type, where a simple password should use string.
+//
+// We need to determine what shapes we might handle beyond
+// simple opaque handling.
+type Shape string
+
+func (s Shape) IsBinary() bool {
+	if !s.Validate() {
+		return false
+	}
+	if s == "binary" {
+		return true
+	}
+	return false
+}
+
+func (s Shape) IsPlaintext() bool {
+	if !s.Validate() {
+		return false
+	}
+	if s == "plaintext" {
+		return true
+	}
+	return false
+}
+
+func (s Shape) IsKeyValue() bool {
+	if !s.Validate() {
+		return false
+	}
+	if s == "key-value" {
+		return true
+	}
+	return false
+}
+
+func (s Shape) Validate() bool {
+	if s != "binary" && s != "plaintext" && s != "key-value" {
+		return false
+	}
+	return true
+}
+
+type SecretResourceCondition struct {
+	StringNotLike map[string][]string
 }
 
 // Secret represents a variable in the system where the value:
@@ -70,8 +121,6 @@ func (secret *Secret) Intake(source, root Vault, kmsKeyId string) error {
 	}
 
 	numOfErr := len(errors)
-	tags := []string{"name:secret_lifecycle_manager", "stage:intake", "name:" + secret.Name, "status:error"}
-	datadog.IncrementCount("slm.secrets.intake.error", float64(numOfErr), tags, statsdClient)
 	if numOfErr == 0 {
 		return nil
 	}
@@ -107,8 +156,6 @@ func (secret *Secret) Deliver(
 		// Abort delivery into subsequent stages if delivery to a stage fails.
 		log.Info("Starting pipeline stage: " + stage.Name)
 		if err := stage.Validate(); err != nil {
-			tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secret.Name, "status:pipline_stage_validation_error"}
-			datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 			errors = append(errors, err)
 			continue
 		}
@@ -136,6 +183,19 @@ func (metadata *SecretMetadata) Validate() error {
 		return errors.New(`Missing description`)
 	}
 	return nil
+}
+
+type SecretResourcePolicyStatement struct {
+	Effect    string
+	Principal string
+	Action    string
+	Resource  string
+	Condition SecretResourceCondition
+}
+
+type SecretResourcePolicy struct {
+	Version   string
+	Statement []SecretResourcePolicyStatement
 }
 
 // Stage describes the set of targets where a common version of the secret must be
@@ -244,15 +304,11 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 	if targetDoesNotExist {
 		log.Info("Secret " + targetSecretName + " doesn't exist. Creating...")
 		if sourceDoesNotExist {
-			tags := []string{"name:secret_lifecycle_manager", "stage:intake", "target:" + targetSecretName, "status:source_not_found"}
-			datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Failed to find secret in intake vault. "+targetErr.Error())
 		}
 		inputSecretValue, err := source.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: aws.String(sourceSecretName)})
 		if err != nil {
-			tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:get_source_value_failure"}
-			datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Error getting secret from intake vault. "+err.Error())
 		}
 		if inputSecretValue.SecretString != nil {
@@ -263,8 +319,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				SecretString: inputSecretValue.SecretString,
 				Tags:         sortedTags,
 			}); err != nil {
-				tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:create_string_secret_error"}
-				datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 				return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Error creating secret in root vault. "+err.Error())
 			}
 		} else if inputSecretValue.SecretBinary != nil {
@@ -275,15 +329,11 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				SecretBinary: inputSecretValue.SecretBinary,
 				Tags:         sortedTags,
 			}); err != nil {
-				tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:create_binary_secret_error"}
-				datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 				return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Error creating secret in root vault. "+err.Error())
 			}
 		}
 
 		log.Info("secret created")
-		tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:created"}
-		datadog.IncrementCount("slm.secrets.intake.create", float64(1), tags, statsdClient)
 
 	} else {
 		log.Info("Secret " + targetSecretName + " already exists. Updating...")
@@ -294,8 +344,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 			SecretId: aws.String(targetSecretName),
 			Tags:     sortedTags,
 		}); err != nil {
-			tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:update_tags_error"}
-			datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 			return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Failed to update tags in root vault. "+err.Error())
 		}
 		newResourcePolicyInput := &secretsmanager.PutResourcePolicyInput{
@@ -303,8 +351,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 			SecretId:       aws.String(targetSecretName),
 		}
 		if _, err := root.PutResourcePolicy(newResourcePolicyInput); err != nil {
-			tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:update_resource_policy_error"}
-			datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 			return newSecretsManagerError(UpdateSecretTagsError, sourceSecretName, targetSecretName, "Failed to update policy in root vault. "+err.Error())
 		}
 
@@ -314,16 +360,12 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 			log.Info("Failed to find " + sourceSecretName + " in intake vault. Use existing root value.")
 			inputSecretValue, targetErr = root.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: aws.String(targetSecretName)})
 			if targetErr != nil {
-				tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:get_root_value_failure"}
-				datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 				return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Failed to get existing root vault secret. "+targetErr.Error())
 			}
 		} else {
 			log.Info(sourceSecretName + "was found in intake vault. Use intake value.")
 			inputSecretValue, sourceErr = source.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: aws.String(sourceSecretName)})
 			if sourceErr != nil {
-				tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:get_source_value_failure"}
-				datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 				return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Failed to get existing intake vault secret. "+sourceErr.Error())
 			}
 		}
@@ -335,8 +377,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				SecretId:     aws.String(targetSecretName),
 				SecretString: inputSecretValue.SecretString,
 			}); err != nil {
-				tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:update_string_secret_error"}
-				datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 				return newSecretsManagerError(UpdateSecretError, sourceSecretName, targetSecretName, "Failed to update secret in root vault. "+err.Error())
 			}
 		} else if inputSecretValue.SecretBinary != nil {
@@ -346,15 +386,11 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				SecretId:     aws.String(targetSecretName),
 				SecretBinary: inputSecretValue.SecretBinary,
 			}); err != nil {
-				tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:update_binary_secret_error"}
-				datadog.IncrementCount("slm.secrets.intake.error", float64(1), tags, statsdClient)
 				return newSecretsManagerError(UpdateSecretError, sourceSecretName, targetSecretName, "Failed to update secret in root vault. "+err.Error())
 			}
 		}
 
 		log.Info("secret updated")
-		tags := []string{"name:secret_lifecycle_manager", "source:" + sourceSecretName, "stage:intake", "target:" + targetSecretName, "status:updated"}
-		datadog.IncrementCount("slm.secrets.intake.update", float64(1), tags, statsdClient)
 
 	}
 
@@ -373,7 +409,7 @@ func (stage *Stage) Deliver(source Vault, secret *Secret) []error {
 }
 
 type Target struct {
-	Kubernetes     KubernetesTarget     `yaml:"kubernetes,omitempty" validate:"required_without=SecretsManager"`
+	Kubernetes KubernetesTarget `yaml:"kubernetes,omitempty" validate:"required_without=SecretsManager"`
 }
 
 func (target *Target) Validate() error {
@@ -433,20 +469,14 @@ func (kubernetesTarget *KubernetesTarget) Deliver(
 	source Vault, stageName,
 	secretName string, shape Shape) []error {
 	if len(stageName) <= 0 {
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secretName, "status:validation_error"}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return []error{errors.New(`invalid stage name`)}
 	}
 
 	if len(secretName) <= 0 {
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secretName, "status:validation_error"}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return []error{errors.New(`invalid secret name`)}
 	}
 
 	if source == nil {
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secretName, "status:validation_error"}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return []error{errors.New(`invalid source vault`)}
 	}
 
@@ -456,16 +486,12 @@ func (kubernetesTarget *KubernetesTarget) Deliver(
 	sourceDescribeInput := &secretsmanager.DescribeSecretInput{SecretId: aws.String(sourceVaultId)}
 	if err := sourceDescribeInput.Validate(); err != nil {
 		log.Error("error with input source secret")
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secretName, "status:source_validation_error"}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return []error{newSecretsManagerError(SecretInputValidationError, sourceVaultId, kubernetesTarget.Name, "Validation error with root vault secret. "+err.Error())}
 	}
 	sourceDescribeOutput, err := source.DescribeSecret(sourceDescribeInput)
 	sourceNotFound := err != nil && ErrorIs(err, secretsmanager.ErrCodeResourceNotFoundException)
 	if sourceNotFound {
 		log.Error("error describing source secret")
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secretName, "status:source_not_found"}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return []error{newSecretsManagerError(GetSecretValueError, sourceVaultId, kubernetesTarget.Name, "Failed to get secret in root vault during kubernetes delivery. "+err.Error())}
 	}
 
@@ -474,16 +500,12 @@ func (kubernetesTarget *KubernetesTarget) Deliver(
 	}
 	if err := sourceGetValueInput.Validate(); err != nil {
 		log.Error("error validating  secret value input")
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secretName, "status:validation_error"}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return []error{newSecretsManagerError(SecretInputValidationError, sourceVaultId, kubernetesTarget.Name, "Validation error with root vault secret. "+err.Error())}
 	}
 
 	sourceSecret, err := GetSecretFromVault(source, sourceGetValueInput)
 	if err != nil {
 		log.Error("error getting source secret from vault")
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secretName, "status:source_not_found"}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return []error{newSecretsManagerError(GetSecretValueError, sourceVaultId, kubernetesTarget.Name, "Failed to get secret in root vault during kubernetes delivery. "+err.Error())}
 	}
 
@@ -576,12 +598,8 @@ func (kubernetesTarget *KubernetesTarget) ApplyKubernetesManifest(
 
 			newSecret, err := secretsClient.Create(context.Background(), newSecret, metaV1.CreateOptions{})
 			if err != nil {
-				tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + newSecret.Name, "status:create_error", "cluster:" + kubernetesTarget.Cluster, "namespace:" + namespace}
-				datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 				return nil, newKubernetesError(CreateKubernetesSecretError, secretName, kubernetesTarget.Name, kubernetesTarget.Cluster, namespace, "Error creating kubernetes secret."+err.Error())
 			}
-			tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + newSecret.Name, "status:created", "cluster:" + kubernetesTarget.Cluster, "namespace:" + namespace}
-			datadog.IncrementCount("slm.secrets.deliver.create", float64(1), tags, statsdClient)
 			return newSecret, nil
 		}
 
@@ -617,17 +635,22 @@ func (kubernetesTarget *KubernetesTarget) ApplyKubernetesManifest(
 
 	updatedSecret, err := secretsClient.Update(context.Background(), secret, metaV1.UpdateOptions{})
 	if err != nil {
-		tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secret.Name, "status:update_error", "cluster:" + kubernetesTarget.Cluster, "namespace:" + namespace}
-		datadog.IncrementCount("slm.secrets.deliver.error", float64(1), tags, statsdClient)
 		return nil, newKubernetesError(UpdateKubernetesSecretError, secretName, kubernetesTarget.Name, kubernetesTarget.Cluster, namespace, "Error updating kubernetes secret."+err.Error())
 
 	}
-	tags := []string{"name:venmo_secret_lifecycle_manager", "stage:deliver", "target:" + secret.Name, "status:updated", "cluster:" + kubernetesTarget.Cluster, "namespace:" + namespace}
-	datadog.IncrementCount("slm.secrets.deliver.update", float64(1), tags, statsdClient)
 
 	return updatedSecret, nil
-
 }
+
+func (kubernetesTarget *KubernetesTarget) IsEmpty() bool {
+	return kubernetesTarget.Name == "" &&
+		len(kubernetesTarget.Namespace) == 0 &&
+		kubernetesTarget.Cluster == ""
+}
+
+type KubernetesSecretsData map[string]string
+
+type KubernetesAnnotations map[string]string
 
 type AccountRole string
 
@@ -678,6 +701,46 @@ func getKubernetesClient(cluster string, accountRole AccountRole) (*kubernetes.C
 
 	if err != nil {
 		return nil, errors.New("Error getting clientset: " + err.Error())
+	}
+	return clientset, nil
+}
+
+func buildConfigFromFlags(context, kubeconfigPath string) (*rest.Config, error) {
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
+		&clientcmd.ConfigOverrides{
+			CurrentContext: context,
+		}).ClientConfig()
+}
+
+func newClientset(cluster *eks.Cluster, accountRole AccountRole) (*kubernetes.Clientset, error) {
+	tokGen, err := token.NewGenerator(true, false)
+	if err != nil {
+		return nil, errors.New("Error getting token generator: " + err.Error())
+	}
+	opts := &token.GetTokenOptions{
+		ClusterID:     aws.StringValue(cluster.Name),
+		AssumeRoleARN: string(accountRole),
+	}
+	tok, err := tokGen.GetWithOptions(opts)
+	if err != nil {
+		return nil, errors.New("Failed to get token: " + err.Error())
+	}
+	ca, err := base64.StdEncoding.DecodeString(aws.StringValue(cluster.CertificateAuthority.Data))
+	if err != nil {
+		return nil, errors.New("Failed to decode CA data: " + err.Error())
+	}
+	clientset, err := kubernetes.NewForConfig(
+		&rest.Config{
+			Host:        aws.StringValue(cluster.Endpoint),
+			BearerToken: tok.Token,
+			TLSClientConfig: rest.TLSClientConfig{
+				CAData: ca,
+			},
+		},
+	)
+	if err != nil {
+		return nil, errors.New("Failed to initialize config: " + err.Error())
 	}
 	return clientset, nil
 }

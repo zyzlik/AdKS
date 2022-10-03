@@ -274,10 +274,3 @@ func ShouldUpdateKmsKey(originalKmsKey, newKmsKey string) bool {
 	}
 	return false
 }
-
-func DeriveRootVaultSecretName(secretName, stageName string) string {
-	normalizedSecretName := strings.TrimSpace(secretName)
-	normalizedStageName := strings.TrimSpace(stageName)
-
-	return fmt.Sprintf("root-vault/%s/%s", normalizedSecretName, normalizedStageName)
-}
