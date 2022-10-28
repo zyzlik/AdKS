@@ -3,7 +3,7 @@ name: Test Cluster
 on: [pull_request]
 
 jobs:
-  validate-secret-yaml:
+  test-cluster:
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS credentials
