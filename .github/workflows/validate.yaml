@@ -4,38 +4,39 @@ on: [pull_request]
 
 jobs:
   validate-secret-yaml:
+    runs-on: ubuntu-latest
     steps:
-    - name: Check out repository
-      uses: actions/checkout@v3
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@13d241b293754004c80624b5567555c4a39ffbe3
-      env:
-        AWS_REGION: "us-east-1"
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-        aws-region: us-east-1
-    - name: Validate secret files
-      uses: zyzlik/AdKS@master
-      with:
-        command: validate
-        secret-file: "test.yaml"
-        intake-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
-        vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
-        vault-kms-key-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+      - name: Check out repository
+        uses: actions/checkout@v3
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@13d241b293754004c80624b5567555c4a39ffbe3
+        env:
+          AWS_REGION: "us-east-1"
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+      - name: Validate secret files
+        uses: zyzlik/AdKS@master
+        with:
+          command: validate
+          secret-file: "test.yaml"
+          intake-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+          vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+          vault-kms-key-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
   validate-k8s-targets:
     steps:
-    - name: run comparison
-      run: |
-        git show origin/$GITHUB_BASE_REF:CODEOWNERS
-        . .github/workflows/scripts/diff.sh
-    - name: validate-targets
-      if: ${{ env.should_update == 'true' }}
-      uses: venmo/secret-lifecycle-manager@master
-      with:
-        command: validate-targets
-        secret-file: ${{ env.input-secrets }}
-        base-secret-file: ${{ env.base-secrets }}
-        intake-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
-        vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
-        vault-kms-key-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+      - name: run comparison
+        run: |
+          git show origin/$GITHUB_BASE_REF:CODEOWNERS
+          . .github/workflows/scripts/diff.sh
+      - name: validate-targets
+        if: ${{ env.should_update == 'true' }}
+        uses: venmo/secret-lifecycle-manager@master
+        with:
+          command: validate-targets
+          secret-file: ${{ env.input-secrets }}
+          base-secret-file: ${{ env.base-secrets }}
+          intake-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+          vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+          vault-kms-key-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole

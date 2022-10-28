@@ -1,4 +1,4 @@
-name: Build and Upload
+name: Run Smoke tests
 
 on:
   pull_request:
