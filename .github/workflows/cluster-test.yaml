@@ -1,21 +1,22 @@
-name: Validate secrets
+name: Test Cluster
 
 on: [pull_request]
 
 jobs:
   validate-secret-yaml:
+    runs-on: ubuntu-latest
     steps:
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@13d241b293754004c80624b5567555c4a39ffbe3
-      env:
-        AWS_REGION: "us-east-1"
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
-        aws-region: us-east-1
-    - name: Configure kube config
-      run: |
-        aws eks update-kubeconfig --name eks-test
-        kubectl config set-context arn:aws:eks:us-east-1:801176112578:cluster/eks-test
-        kubectl get ns
-        kubectl get secrets -n test
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@13d241b293754004c80624b5567555c4a39ffbe3
+        env:
+          AWS_REGION: "us-east-1"
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: us-east-1
+      - name: Configure kube config
+        run: |
+          aws eks update-kubeconfig --name eks-test
+          kubectl config set-context arn:aws:eks:us-east-1:801176112578:cluster/eks-test
+          kubectl get ns
+          kubectl get secrets -n test

@@ -25,6 +25,7 @@ jobs:
           vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
           vault-kms-key-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
   validate-k8s-targets:
+    runs-on: ubuntu-latest
     steps:
       - name: run comparison
         run: |
