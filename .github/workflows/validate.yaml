@@ -17,7 +17,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: us-east-1
       - name: Validate secret files
-        uses: zyzlik/AdKS@main
+        uses: zyzlik/AdKS@PROJ-2
         with:
           command: validate
           secret-file: "test.yaml"
@@ -33,7 +33,7 @@ jobs:
           . .github/workflows/scripts/diff.sh
       - name: validate-targets
         if: ${{ env.should_update == 'true' }}
-        uses: zyzlik/AdKS@main
+        uses: zyzlik/AdKS@PROJ-2
         with:
           command: validate-targets
           secret-file: ${{ env.input-secrets }}
