@@ -1,0 +1,21 @@
+secrets:
+- name: test-secret
+  metadata:
+    team_owner: Test Team
+    use_description: >
+      password
+  global: false
+  shape: plaintext
+  pipeline:
+  - name: qa
+    production: false
+    intake_source:
+      name: intake/test-secret
+    targets:
+    - kubernetes:
+        name: test-secret-object
+        account_role: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+        data_field: password
+        namespace:
+        - test
+        cluster: eks-test

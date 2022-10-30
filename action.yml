@@ -1,0 +1,46 @@
+# action.yml
+name: 'process-secrets'
+description: 'process secret meta data'
+inputs:
+  command:
+    description: 'command to run'
+    required: true
+    default: 'deliver'
+  secret-file:
+    description: 'yaml file containing secret meta data'
+    required: true
+    default: 'secret.yml'
+  base-secret-file:
+    description: 'yaml file contatining secrets from base git ref (used for validate target)'
+    required: false
+  intake-reader-role-arn:
+    description: 'arn of intake reader role in sandbox account'
+    required: true
+    default: ''
+  vault-reader-role-arn:
+    description: 'arn of reader role in fnd-vault account'
+    required: true
+    default: ''
+  vault-writer-role-arn:
+    description: 'arn of writer role in fnd-vault account'
+    required: true
+    default: ''
+  vault-kms-key-arn:
+    description: 'arn of kms key in fnd-vault account'
+    required: true
+    default: ''
+runs:
+  # this should use the published "secret-lifecycle-manager" image instead
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - ${{ inputs.command }}
+  env:
+    KUBECONFIG: /AdKS/k8s/config
+    SLM_SECRET_SPEC_FILE: ${{ inputs.secret-file }}
+    SLM_BASE_SECRET_FILE: ${{ inputs.base-secret-file }}
+    SLM_INTAKE_READER_ROLE_ARN: ${{ inputs.intake-reader-role-arn }}
+    SLM_VAULT_READER_ROLE_ARN: ${{ inputs.vault-reader-role-arn }}
+    SLM_VAULT_WRITER_ROLE_ARN: ${{ inputs.vault-writer-role-arn }}
+    SLM_VAULT_KMS_KEY_ARN: ${{ inputs.vault-kms-key-arn }}
+    
