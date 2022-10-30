@@ -36,7 +36,7 @@ runs:
   args:
     - ${{ inputs.command }}
   env:
-    KUBECONFIG: /manager/k8s/config
+    KUBECONFIG: /AdKS/k8s/config
     SLM_SECRET_SPEC_FILE: ${{ inputs.secret-file }}
     SLM_BASE_SECRET_FILE: ${{ inputs.base-secret-file }}
     SLM_INTAKE_READER_ROLE_ARN: ${{ inputs.intake-reader-role-arn }}
