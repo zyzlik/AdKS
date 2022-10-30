@@ -24,9 +24,6 @@ clean:
 	@echo "Cleaning"
 	@rm -f ./bin/*
 
-configure: ## Configures things
-	@echo "Configuring"
-
 build: ## Builds things
 	@echo "Building Intake"
 	@echo "\tLinux64"

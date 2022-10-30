@@ -14,6 +14,7 @@ COPY  . /AdKS
 WORKDIR /AdKS
 
 # Builds binary
+RUN ls
 RUN make build
 
 # Code file to execute when the docker container starts up (`entrypoint.sh`)
