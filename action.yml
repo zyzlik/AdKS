@@ -32,7 +32,7 @@ inputs:
 runs:
   # this should use the published "secret-lifecycle-manager" image instead
   using: 'docker'
-  image: 'docker/manage-secrets.Dockerfile'
+  image: 'Dockerfile'
   args:
     - ${{ inputs.command }}
   env:
