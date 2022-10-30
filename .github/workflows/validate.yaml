@@ -17,7 +17,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
           aws-region: us-east-1
       - name: Validate secret files
-        uses: zyzlik/AdKS@PROJ-2
+        uses: zyzlik/AdKS@530c3352742e18b58b7ddd7fa293df59a040fd48
         with:
           command: validate
           secret-file: "test.yaml"
@@ -47,7 +47,7 @@ jobs:
           role-duration-seconds: 1200
       - name: validate-targets
         if: ${{ env.should_update == 'true' }}
-        uses: zyzlik/AdKS@PROJ-2
+        uses: zyzlik/AdKS@530c3352742e18b58b7ddd7fa293df59a040fd48
         with:
           command: validate-targets
           secret-file: ${{ env.input-secrets }}
