@@ -1,6 +1,6 @@
 #!/bin/bash
 
-files=( $(git diff origin/master --diff-filter=d --name-only "*.yaml" :^.github) )
+files=( $(git diff origin/main --diff-filter=d --name-only "*.yaml" :^.github) )
 input=""
 base=""
 declare -p files
@@ -19,11 +19,11 @@ for i in ${files[@]} ; do
         input+=",$i"
     fi
 
-    if ! git show origin/master:$i > base-$i
+    if ! git show origin/main:$i > base-$i
     #git show origin/master:$i > temp-$i
 
     then
-        echo "file $i not found on master it must be new"
+        echo "file $i not found on main it must be new"
         #net new secrets file, we don't need a base copy
         rm "base-$i"
         continue
