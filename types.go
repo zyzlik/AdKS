@@ -292,7 +292,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 	targetResourcePolicyOutput, policyErr := root.GetResourcePolicy(getResourcePolicyInput)
 	if policyErr != nil {
 		log.Error("Error retrieving policy for root secret " + policyErr.Error())
-
 	}
 
 	if !ShouldUpdate(sourceSecretOutput, rootSecretOutput, defaultPolicyString, targetResourcePolicyOutput, kmsKeyId, sortedTags, targetDoesNotExist) {
@@ -340,12 +339,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 		// Moving tag resource to the top. We need to refactor this code to be smarter,
 		// but for now let's update the tags and resource for every update.
 
-		if _, err := root.TagResource(&secretsmanager.TagResourceInput{
-			SecretId: aws.String(targetSecretName),
-			Tags:     sortedTags,
-		}); err != nil {
-			return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Failed to update tags in root vault. "+err.Error())
-		}
 		newResourcePolicyInput := &secretsmanager.PutResourcePolicyInput{
 			ResourcePolicy: defaultPolicyString,
 			SecretId:       aws.String(targetSecretName),
