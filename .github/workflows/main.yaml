@@ -43,4 +43,4 @@ jobs:
         intake-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
         vault-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
         vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
-        vault-kms-key-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+        vault-kms-key-arn: arn:aws:kms:us-east-1:801176112578:key/43097f57-8a02-460d-ab33-60f0d8ac22cc
