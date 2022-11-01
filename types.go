@@ -288,11 +288,11 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 		SecretId: aws.String(targetSecretName),
 	}
 
+
 	defaultPolicyString := aws.String("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"secretsmanager:*\",\"Resource\":\"*\",\"Condition\":{\"StringNotLike\":{\"aws:PrincipalArn\":" + string(principals) + "}}}]}")
 	targetResourcePolicyOutput, policyErr := root.GetResourcePolicy(getResourcePolicyInput)
 	if policyErr != nil {
 		log.Error("Error retrieving policy for root secret " + policyErr.Error())
-
 	}
 
 	if !ShouldUpdate(sourceSecretOutput, rootSecretOutput, defaultPolicyString, targetResourcePolicyOutput, kmsKeyId, sortedTags, targetDoesNotExist) {
@@ -304,7 +304,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 	if targetDoesNotExist {
 		log.Info("Secret " + targetSecretName + " doesn't exist. Creating...")
 		if sourceDoesNotExist {
-
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Failed to find secret in intake vault. "+targetErr.Error())
 		}
 		inputSecretValue, err := source.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: aws.String(sourceSecretName)})
@@ -312,6 +311,7 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Error getting secret from intake vault. "+err.Error())
 		}
 		if inputSecretValue.SecretString != nil {
+			log.Info("SecretString")
 			if _, err := root.CreateSecret(&secretsmanager.CreateSecretInput{
 				Name:         aws.String(targetSecretName),
 				Description:  aws.String(secret.Metadata.UseDescription),
@@ -319,9 +319,11 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				SecretString: inputSecretValue.SecretString,
 				Tags:         sortedTags,
 			}); err != nil {
+				log.Info(err)
 				return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Error creating secret in root vault. "+err.Error())
 			}
 		} else if inputSecretValue.SecretBinary != nil {
+			log.Info("SecretBinary")
 			if _, err := root.CreateSecret(&secretsmanager.CreateSecretInput{
 				Name:         aws.String(targetSecretName),
 				Description:  aws.String(secret.Metadata.UseDescription),
@@ -340,12 +342,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 		// Moving tag resource to the top. We need to refactor this code to be smarter,
 		// but for now let's update the tags and resource for every update.
 
-		if _, err := root.TagResource(&secretsmanager.TagResourceInput{
-			SecretId: aws.String(targetSecretName),
-			Tags:     sortedTags,
-		}); err != nil {
-			return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Failed to update tags in root vault. "+err.Error())
-		}
 		newResourcePolicyInput := &secretsmanager.PutResourcePolicyInput{
 			ResourcePolicy: defaultPolicyString,
 			SecretId:       aws.String(targetSecretName),

@@ -1,0 +1,43 @@
+name: Intake and deliver secrets
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency: main
+
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    name: This workflow delivers secrets
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@13d241b293754004c80624b5567555c4a39ffbe3
+      env:
+        AWS_REGION: "us-east-1"
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    - name: Check out repository code
+      uses: actions/checkout@v2
+    - name: Intake
+      uses: zyzlik/AdKS@PROJ-3
+      with:
+        command: intake
+        secret-file: "test.yaml"
+        intake-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+        vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+        vault-kms-key-arn: arn:aws:kms:us-east-1:801176112578:key/43097f57-8a02-460d-ab33-60f0d8ac22cc
+    - name: Deliver
+      uses: zyzlik/AdKS@PROJ-3
+      with:
+        command: deliver
+        secret-file: "test.yaml"
+        intake-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+        vault-reader-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+        vault-writer-role-arn: arn:aws:iam::801176112578:role/AdKSServiceAccountRole
+        vault-kms-key-arn: arn:aws:kms:us-east-1:801176112578:key/43097f57-8a02-460d-ab33-60f0d8ac22cc
