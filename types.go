@@ -259,10 +259,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 
 	// Determine if root vault copy exists (DescribeSecret)
 	rootSecretOutput, targetErr := root.DescribeSecret(&secretsmanager.DescribeSecretInput{SecretId: aws.String(targetSecretName)})
-	log.Info("#############")
-	log.Info(rootSecretOutput)
-	log.Info(targetErr)
-	log.Info("#############")
 	targetDoesNotExist := targetErr != nil && ErrorIs(targetErr, secretsmanager.ErrCodeResourceNotFoundException)
 
 	atags := []*secretsmanager.Tag{}
@@ -292,10 +288,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 		SecretId: aws.String(targetSecretName),
 	}
 
-	log.Info("###################")
-	log.Info(getResourcePolicyInput)
-	log.Info(targetSecretName)
-	log.Info("###################")
 
 	defaultPolicyString := aws.String("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"secretsmanager:*\",\"Resource\":\"*\",\"Condition\":{\"StringNotLike\":{\"aws:PrincipalArn\":" + string(principals) + "}}}]}")
 	targetResourcePolicyOutput, policyErr := root.GetResourcePolicy(getResourcePolicyInput)
@@ -312,14 +304,18 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 	if targetDoesNotExist {
 		log.Info("Secret " + targetSecretName + " doesn't exist. Creating...")
 		if sourceDoesNotExist {
-
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Failed to find secret in intake vault. "+targetErr.Error())
 		}
 		inputSecretValue, err := source.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: aws.String(sourceSecretName)})
+		log.Info("###################")
+		log.Info(inputSecretValue)
+		log.Info(err)
+		log.Info("###################")
 		if err != nil {
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Error getting secret from intake vault. "+err.Error())
 		}
 		if inputSecretValue.SecretString != nil {
+			log.Info("SecretString")
 			if _, err := root.CreateSecret(&secretsmanager.CreateSecretInput{
 				Name:         aws.String(targetSecretName),
 				Description:  aws.String(secret.Metadata.UseDescription),
@@ -330,6 +326,7 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Error creating secret in root vault. "+err.Error())
 			}
 		} else if inputSecretValue.SecretBinary != nil {
+			log.Info("SecretBinary")
 			if _, err := root.CreateSecret(&secretsmanager.CreateSecretInput{
 				Name:         aws.String(targetSecretName),
 				Description:  aws.String(secret.Metadata.UseDescription),
