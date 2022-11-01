@@ -319,7 +319,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				SecretString: inputSecretValue.SecretString,
 				Tags:         sortedTags,
 			}); err != nil {
-				log.Info(err)
 				return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Error creating secret in root vault. "+err.Error())
 			}
 		} else if inputSecretValue.SecretBinary != nil {
