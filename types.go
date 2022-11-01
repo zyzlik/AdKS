@@ -259,6 +259,10 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 
 	// Determine if root vault copy exists (DescribeSecret)
 	rootSecretOutput, targetErr := root.DescribeSecret(&secretsmanager.DescribeSecretInput{SecretId: aws.String(targetSecretName)})
+	log.Info("#############")
+	log.Info(rootSecretOutput)
+	log.Info(targetErr)
+	log.Info("#############")
 	targetDoesNotExist := targetErr != nil && ErrorIs(targetErr, secretsmanager.ErrCodeResourceNotFoundException)
 
 	atags := []*secretsmanager.Tag{}
@@ -287,6 +291,11 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 	getResourcePolicyInput := &secretsmanager.GetResourcePolicyInput{
 		SecretId: aws.String(targetSecretName),
 	}
+
+	log.Info("###################")
+	log.Info(getResourcePolicyInput)
+	log.Info(targetSecretName)
+	log.Info("###################")
 
 	defaultPolicyString := aws.String("{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"secretsmanager:*\",\"Resource\":\"*\",\"Condition\":{\"StringNotLike\":{\"aws:PrincipalArn\":" + string(principals) + "}}}]}")
 	targetResourcePolicyOutput, policyErr := root.GetResourcePolicy(getResourcePolicyInput)
