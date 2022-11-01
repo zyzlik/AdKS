@@ -307,10 +307,6 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Failed to find secret in intake vault. "+targetErr.Error())
 		}
 		inputSecretValue, err := source.GetSecretValue(&secretsmanager.GetSecretValueInput{SecretId: aws.String(sourceSecretName)})
-		log.Info("###################")
-		log.Info(inputSecretValue)
-		log.Info(err)
-		log.Info("###################")
 		if err != nil {
 			return newSecretsManagerError(GetSecretValueError, sourceSecretName, targetSecretName, "Error getting secret from intake vault. "+err.Error())
 		}
@@ -323,6 +319,7 @@ func (stage *Stage) Intake(secret *Secret, source, root Vault, kmsKeyId string) 
 				SecretString: inputSecretValue.SecretString,
 				Tags:         sortedTags,
 			}); err != nil {
+				log.Info(err)
 				return newSecretsManagerError(CreateSecretError, sourceSecretName, targetSecretName, "Error creating secret in root vault. "+err.Error())
 			}
 		} else if inputSecretValue.SecretBinary != nil {
